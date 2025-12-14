@@ -1,116 +1,114 @@
 import streamlit as st
 from openai import OpenAI
+import base64
 
-# 1. 页面基本设置
-st.set_page_config(page_title="🎨 AI 提示词魔法师 Pro", page_icon="🏗️", layout="centered")
+# 1. 页面基本设置 (宽屏模式 + 图标)
+st.set_page_config(page_title="🎨 AI 提示词魔法师 Pro", page_icon="🪄", layout="centered")
 st.title("✨ AI 提示词魔法师 Pro")
-st.markdown("输入简单的中文描述，AI 帮你扩写成大师级英文 Prompt。")
 
-# --- 🔐 核心修改：密码验证逻辑 ---
+# --- 🛠️ 辅助函数：图片转 Base64 ---
+def encode_image(uploaded_file):
+    return base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
+
+# --- 🔐 侧边栏：核心设置区 ---
 with st.sidebar:
     st.header("🔐 身份验证")
     
-    # 获取云端配置的密码和Key（防止报错先给个默认值）
+    # 从云端 secrets 获取密码和 Key
     SYSTEM_PASSWORD = st.secrets.get("APP_PASSWORD", None)
-    SYSTEM_API_KEY = st.secrets.get("DEEPSEEK_KEY", None)
+    SYSTEM_API_KEY = st.secrets.get("API_KEY", None)
 
     api_key = None
-    
-    # 1. 输入密码框
-    user_password = st.text_input("请输入访问密码", type="password", placeholder="输入密码自动加载 Key")
+    user_password = st.text_input("访问密码", type="password", placeholder="输入密码自动加载 Key")
 
-    # 2. 判断逻辑
+    # 密码验证逻辑
     if SYSTEM_PASSWORD and user_password == SYSTEM_PASSWORD:
         api_key = SYSTEM_API_KEY
-        st.success("✅ 密码正确！已自动加载 Key")
+        st.success("✅ 密码正确！")
     else:
-        # 如果密码不对，或者没配置密码，允许手动输入
-        if user_password:
-            st.error("❌ 密码错误")
-        st.markdown("---")
-        st.caption("或者手动输入 API Key：")
-        api_key = st.text_input("API Key", type="password", key="manual_key")
+        if user_password: st.error("❌ 密码错误")
+        st.caption("或手动输入 API Key：")
+        api_key = st.text_input("Key", type="password", label_visibility="collapsed")
 
-    # API 地址配置
-    base_url = st.text_input("API 地址", value="https://api.deepseek.com")
-    model_name = st.text_input("模型名称", value="deepseek-chat")
-    
     st.markdown("---")
-    st.info("💡 **小贴士**：\n- **建筑/写实**：用标签模式。\n- **创意/插画**：用自然语言模式。")
-
-# 3. 主输入区
-user_input = st.text_area("你想画什么？(支持中文)", height=100, placeholder="例如：一座海边的白色美术馆，扎哈·哈迪德风格，流线型设计...")
-
-# 4. 模式选择
-col1, col2 = st.columns(2)
-with col1:
-    ratio = st.selectbox("画幅比例", ["--ar 16:9 (横屏)", "--ar 9:16 (手机)", "--ar 1:1 (方形)", "--ar 4:3 (标准)", "--ar 3:2 (摄影)"])
-with col2:
-    mode = st.selectbox("生成模式 (核心算法)", [
-        "建筑设计 (Architecture)",            
-        "标准模式 (MJ/SD通用)",               
-        "自然语言模式 (Google/Nano Banana 2)", 
-        "写实摄影 (Photo)",                   
-        "二次元魔法 (Niji)",                  
-        "3D 渲染 (3D)",                       
-        "极简模式 (MJ V6专用)"                
-    ])
-
-# 5. 高级选项区
-with st.expander("🎨 点击展开：更多高级选项 (光线、视角、材质)"):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        lighting = st.selectbox("💡 光线氛围", ["不指定", "自然光 (Natural Light)", "黄金时刻 (Golden Hour)", "电影级布光 (Cinematic)", "阴天漫射光 (Overcast)", "夜景霓虹 (Night Neon)"])
-    with c2:
-        camera = st.selectbox("📷 镜头视角", ["不指定", "一点透视 (One-point perspective)", "广角宏大 (Wide Angle)", "鸟瞰图 (Aerial View)", "人视角度 (Eye Level)", "微距 (Macro)"])
-    with c3:
-        material = st.selectbox("🧶 材质/渲染", ["不指定", "混凝土与玻璃 (Concrete & Glass)", "木质纹理 (Wooden)", "砖石结构 (Brick)", "虚幻引擎5 (Unreal Engine 5)", "V-Ray 渲染"])
+    st.header("⚙️ API 设置 (推荐用中转)")
     
-    negative_prompt = st.text_input("🚫 负面提示词", value="text, watermark, blurry, low quality, distorted, ugly, bad architecture")
+    # 👇 这里是关键：允许同时配置两个模型，方便来回切换
+    base_url = st.text_input("API 地址 (Base URL)", value="https://api.deepseek.com", help="如果是中转商，通常填 https://api.xxx.com/v1")
+    
+    st.caption("📝 **文本生成模型** (推荐 DeepSeek)")
+    text_model = st.text_input("Text Model", value="deepseek-chat", label_visibility="collapsed")
+    
+    st.caption("🖼️ **图片反推模型** (推荐 GPT-4o-mini)")
+    vision_model = st.text_input("Vision Model", value="gpt-4o-mini", label_visibility="collapsed")
+    
+    st.info("💡 **省钱攻略**：\n找一个支持 DeepSeek 和 OpenAI 的中转商，填入统一的 API 地址，就能同时用这两个功能了！")
 
-# 6. 系统提示词逻辑
-system_prompts = {
-    "建筑设计 (Architecture)": "Translate to English. Target: High-end Architectural Visualization. Add tags: architectural photography, ArchDaily style, Dezeen style, modern architecture, photorealistic, 8k, highly detailed, dramatic lighting, V-Ray render, clean lines, geometric structure.",
-    "标准模式 (MJ/SD通用)": "Translate to English. Output purely as a list of comma-separated keywords (tags). Focus on visual descriptors, quality tags, and art styles.",
-    "极简模式 (MJ V6专用)": "Translate to English. Keep it extremely concise. Subject + Action + Style + Lighting. Comma separated.",
-    "写实摄影 (Photo)": "Translate to English. Target: Photorealism. Add tags: shot on Sony A7RIV, 85mm lens, f/1.8, cinematic lighting, hyper-realistic, 8k, highly detailed skin texture/environment.",
-    "3D 渲染 (3D)": "Translate to English. Target: 3D Render. Add tags: octane render, blender, c4d, ray tracing, unreal engine 5, 8k resolution, clean background, 3d masterpiece.",
-    "二次元魔法 (Niji)": "Translate to English. Target model: Niji Journey. Add tags: anime style, cel shading, studio ghibli, vibrant colors, highly detailed, 2d.",
-    "自然语言模式 (Google/Nano Banana 2)": """
-    You are an expert prompt engineer for Google Imagen 2 (Nano Banana) models. 
-    1. Translate user description into a rich, descriptive, natural English paragraph.
-    2. Do NOT use comma-separated tags. Write complete, fluid sentences.
-    3. Start with 'A photorealistic image of...' or 'An architectural rendering of...'.
-    4. Seamlessly weave lighting, camera angles, and materials into the description.
-    """
-}
+# --- 🏗️ 功能标签页 ---
+tab1, tab2 = st.tabs(["📝 文本生成提示词", "🖼️ 图片反推提示词 (看图)"])
 
-# 7. 生成按钮逻辑
-if st.button("🚀 开始施法 (生成)", type="primary"):
-    # 检查 Key 是否存在（无论是自动加载的还是手动输入的）
-    if not api_key:
-        st.error("🚨 请先输入密码或 API Key！")
-    elif not user_input:
-        st.warning("请填写你想画什么！")
-    else:
+# ==========================================
+# 👉 标签 1：文本生成 (DeepSeek/MJ)
+# ==========================================
+with tab1:
+    st.subheader("✍️ 描述画面，生成 Prompt")
+    user_input = st.text_area("你想画什么？(支持中文)", height=100, placeholder="例如：一座海边的白色美术馆，扎哈·哈迪德风格，流线型设计...")
+
+    # 模式选择
+    col1, col2 = st.columns(2)
+    with col1:
+        ratio = st.selectbox("画幅比例", ["--ar 16:9 (横屏)", "--ar 9:16 (手机)", "--ar 1:1 (方形)", "--ar 4:3 (标准)", "--ar 3:2 (摄影)"])
+    with col2:
+        mode = st.selectbox("生成模式", [
+            "建筑设计 (Architecture)",            # 🏗️ 你的建筑需求
+            "标准模式 (MJ/SD通用)",               # 通用
+            "自然语言模式 (Google/Nano Banana 2)", # Google/DALL-E
+            "极简模式 (MJ V6专用)",               # 省 token
+            "写实摄影 (Photo)",                   # 人像风景
+            "二次元魔法 (Niji)",                  # 动漫
+            "3D 渲染 (3D)"                        # 设计盲盒
+        ])
+
+    # 高级选项 (折叠)
+    with st.expander("🎨 高级选项 (光线、视角、材质)"):
+        c1, c2, c3 = st.columns(3)
+        with c1: lighting = st.selectbox("💡 光线", ["不指定", "自然光", "黄金时刻", "电影级布光", "阴天漫射", "赛博霓虹"])
+        with c2: camera = st.selectbox("📷 视角", ["不指定", "一点透视", "广角宏大", "鸟瞰图", "人视角度", "微距"])
+        with c3: material = st.selectbox("🧶 材质", ["不指定", "混凝土与玻璃", "木质纹理", "虚幻引擎5", "V-Ray渲染", "磨砂质感"])
+        negative_prompt = st.text_input("🚫 负面提示词", value="text, watermark, blurry, low quality, bad anatomy, ugly")
+
+    # 系统提示词逻辑 (AI大脑)
+    system_prompts = {
+        "建筑设计 (Architecture)": "Translate to English. Target: High-end Architectural Visualization. Add tags: architectural photography, ArchDaily style, Dezeen style, modern architecture, photorealistic, 8k, highly detailed, dramatic lighting, V-Ray render, clean lines, geometric structure.",
+        "标准模式 (MJ/SD通用)": "Translate to English. Output purely as a list of comma-separated keywords (tags). Focus on visual descriptors, quality tags.",
+        "自然语言模式 (Google/Nano Banana 2)": "You are an expert for Google Imagen 2. Translate to a rich, descriptive, natural English paragraph. Do NOT use comma-separated tags. Write fluid sentences. Start with 'A photorealistic image of...'.",
+        "极简模式 (MJ V6专用)": "Translate to English. Keep it extremely concise. Subject + Action + Style + Lighting. Comma separated.",
+        "写实摄影 (Photo)": "Translate to English. Target: Photorealism. Add tags: shot on Sony A7RIV, 85mm lens, f/1.8, cinematic lighting, hyper-realistic, 8k, raw photo.",
+        "二次元魔法 (Niji)": "Translate to English. Target model: Niji Journey. Add tags: anime style, cel shading, studio ghibli, vibrant colors, highly detailed.",
+        "3D 渲染 (3D)": "Translate to English. Target: 3D Render. Add tags: octane render, blender, c4d, unreal engine 5, 8k resolution, 3d masterpiece."
+    }
+
+    if st.button("🚀 开始生成 (文本)", type="primary"):
+        if not api_key: st.error("请先验证密码或输入 Key！"); st.stop()
+        
         try:
             client = OpenAI(api_key=api_key, base_url=base_url)
             
-            with st.spinner('AI 正在绘制蓝图...'):
-                details = []
-                if lighting != "不指定": details.append(f"光线：{lighting}")
-                if camera != "不指定": details.append(f"视角：{camera}")
-                if material != "不指定": details.append(f"材质：{material}")
-                
-                full_req = f"用户描述：{user_input}。额外要求：{' '.join(details)}"
+            # 拼接高级选项
+            details = []
+            if lighting != "不指定": details.append(f"光线：{lighting}")
+            if camera != "不指定": details.append(f"视角：{camera}")
+            if material != "不指定": details.append(f"材质：{material}")
+            full_req = f"用户描述：{user_input}。额外要求：{' '.join(details)}"
 
+            with st.spinner(f'AI ({text_model}) 正在构思...'):
                 response = client.chat.completions.create(
-                    model=model_name,
+                    model=text_model, # 使用侧边栏设置的文本模型
                     messages=[
                         {"role": "system", "content": system_prompts[mode]},
                         {"role": "user", "content": full_req}
                     ],
-                    temperature=0.7,
+                    temperature=0.7
                 )
                 
                 ai_result = response.choices[0].message.content
@@ -119,10 +117,59 @@ if st.button("🚀 开始施法 (生成)", type="primary"):
                     final_output += f" --no {negative_prompt}"
 
             st.success("生成成功！")
-            st.markdown("### ✅ 生成结果 (点击右上角复制)")
+            st.markdown("### ✅ 结果 (右上角复制)")
             st.code(final_output, language="text", wrap_lines=True)
-            st.caption(f"当前模式：{mode} 🏗️")
 
         except Exception as e:
-            st.error(f"出错啦：{str(e)}")
-            st.markdown("提示：如果是密码正确但报错，可能是 API Key 欠费了或填写有误。")
+            st.error(f"出错：{str(e)}")
+
+# ==========================================
+# 👉 标签 2：图片反推 (GPT-4o/Claude)
+# ==========================================
+with tab2:
+    st.subheader("🖼️ 上传图片，反推 Prompt")
+    st.info(f"💡 当前使用模型：**{vision_model}** (请确保你的 Key 支持该模型)")
+
+    uploaded_file = st.file_uploader("拖入参考图", type=["jpg", "png", "jpeg"])
+    reverse_mode = st.radio("输出格式", ["MJ 标签格式 (逗号分隔)", "自然语言描述 (写作文)"], horizontal=True)
+
+    if uploaded_file and st.button("🔍 开始反推", type="primary"):
+        if not api_key: st.error("请先验证密码！"); st.stop()
+        
+        try:
+            client = OpenAI(api_key=api_key, base_url=base_url)
+            base64_image = encode_image(uploaded_file)
+            
+            # 定义反推指令
+            if "标签" in reverse_mode:
+                prompt_text = "分析这张图的主体、风格、光影、材质。直接输出英文关键词，用逗号分隔。"
+            else:
+                prompt_text = "详细描述这张图片，包括主体、环境、光影和风格。请输出一段通顺优美的英文描述（适合 DALL-E 3 或 Google GenAI）。"
+
+            with st.spinner(f'AI ({vision_model}) 正在观察图片...'):
+                response = client.chat.completions.create(
+                    model=vision_model, # 使用侧边栏设置的视觉模型
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt_text},
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                            ]
+                        }
+                    ],
+                    max_tokens=500
+                )
+            
+            result_text = response.choices[0].message.content
+            
+            c1, c2 = st.columns([1, 2])
+            with c1: st.image(uploaded_file, caption="原图", use_container_width=True)
+            with c2:
+                st.success("反推完成！")
+                st.code(result_text, language="text", wrap_lines=True)
+
+        except Exception as e:
+            st.error("❌ 失败了")
+            st.error(f"错误详情：{str(e)}")
+            st.warning("常见原因：你使用的 API Key 不支持视觉模型，或者 Base URL 填的是 DeepSeek 官方地址（DeepSeek 暂不支持看图）。建议使用支持 GPT-4o-mini 的中转服务。")
