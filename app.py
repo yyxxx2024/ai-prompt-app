@@ -6,7 +6,7 @@ import requests
 import time
 import io
 import hashlib
-import qrcode # 📦 新增
+import qrcode
 from io import BytesIO
 
 # 尝试导入 docx
@@ -19,7 +19,7 @@ except ImportError:
 # ================= 1. 页面基本设置 =================
 st.set_page_config(page_title="AI 提示词魔法师 Pro", page_icon="🍊", layout="centered")
 
-# ================= 🎨 UI：现代极简亮白风格 =================
+# ================= 🎨 UI 样式 =================
 def add_modern_light_style():
     st.markdown("""
     <style>
@@ -48,7 +48,7 @@ def add_modern_light_style():
 
 add_modern_light_style()
 
-# ================= 🛠️ 核心工具函数 =================
+# ================= 🛠️ Gitee 核心函数 =================
 
 def get_gitee_config():
     return {
@@ -61,36 +61,72 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def get_all_users():
+    """获取所有用户 (带自动纠错功能)"""
     try:
         cfg = get_gitee_config()
         url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/users.json"
         res = requests.get(url, params={"access_token": cfg['token']})
+        
         if res.status_code == 200:
             content = res.json()['content']
             decoded = base64.b64decode(content).decode('utf-8')
-            return json.loads(decoded)
+            data = json.loads(decoded)
+            
+            # 🛠️【核心修复】如果不小心存成了列表[]，强制转为字典{}
+            if isinstance(data, list):
+                return {} 
+            return data
+            
+        elif res.status_code == 404:
+            return {} 
         return {}
     except: return {}
 
 def register_new_user(username, password):
     users = get_all_users()
-    if username in users: return False, "❌ 用户名已存在"
+    
+    # 再次确保 users 是字典
+    if isinstance(users, list): users = {}
+
+    if username in users:
+        return False, "❌ 用户名已存在"
+    
     users[username] = hash_password(password)
+    
     try:
         cfg = get_gitee_config()
         url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/users.json"
+        
+        # 获取 sha 用于更新
         sha = None
         get_res = requests.get(url, params={"access_token": cfg['token']})
-        if get_res.status_code == 200: sha = get_res.json()['sha']
+        if get_res.status_code == 200:
+            sha = get_res.json()['sha']
+        
+        # 编码字典为JSON
         new_text = json.dumps(users, ensure_ascii=False, indent=4)
         new_b64 = base64.b64encode(new_text.encode('utf-8')).decode('utf-8')
-        payload = {"access_token": cfg['token'], "content": new_b64, "message": f"Register {username}"}
+        
+        payload = {
+            "access_token": cfg['token'],
+            "content": new_b64,
+            "message": f"Register user {username}"
+        }
         if sha: payload["sha"] = sha
+        
         res = requests.put(url, json=payload)
-        return (True, "✅ 注册成功") if res.status_code in [200, 201] else (False, f"失败: {res.text}")
-    except Exception as e: return False, str(e)
+        
+        if res.status_code in [200, 201]:
+            return True, "✅ 注册成功！已自动登录"
+        else:
+            return False, f"注册失败: {res.text}"
+    except Exception as e:
+        return False, str(e)
 
-def get_user_filename(username): return f"prompts_{username}.json"
+# --- 数据存储系统 ---
+
+def get_user_filename(username):
+    return f"prompts_{username}.json"
 
 def load_data(username):
     try:
@@ -143,9 +179,11 @@ def generate_word(data):
     if not HAS_DOCX: return None
     doc = Document()
     doc.add_heading('🌟 我的 AI 提示词宝库', 0)
-    for cat in sorted(list(set([d['category'] for d in data]))):
+    cats = sorted(list(set([d['category'] for d in data])))
+    for cat in cats:
         doc.add_heading(f"📂 {cat}", level=1)
-        for item in [d for d in data if d['category'] == cat]:
+        items = [d for d in data if d['category'] == cat]
+        for item in items:
             doc.add_heading(item.get('desc', '无标题'), level=2)
             doc.add_paragraph(item['prompt']); doc.add_paragraph("-" * 30)
     bio = io.BytesIO()
@@ -171,29 +209,24 @@ def generate_qr_code(url):
     img.save(img_byte_arr, format='PNG')
     return img_byte_arr.getvalue()
 
-# ================= 🚀 初始化与自动登录 =================
+# ================= 🚀 初始化 =================
 if "current_user" not in st.session_state: st.session_state.current_user = None
 if "last_results" not in st.session_state: st.session_state.last_results = None
 
-# --- 处理 URL 参数自动登录 ---
-# 这是一个黑科技：如果在网址里发现 ?u=xxx&p=xxx，就尝试自动登录
+# URL 自动登录逻辑
 if not st.session_state.current_user:
     params = st.query_params
     if "u" in params and "p" in params:
         u_arg = params["u"]
         p_arg = params["p"]
-        # 尝试静默验证
         users_db = get_all_users()
-        # 这里为了安全，URL 里的 p 最好是 Base64 编码过的，或者简单的混淆
-        # 简单起见，我们假设是 Base64 传递的密码
         try:
             decoded_p = base64.b64decode(p_arg).decode('utf-8')
             hashed_p = hash_password(decoded_p)
             if u_arg in users_db and users_db[u_arg] == hashed_p:
                 st.session_state.current_user = u_arg
                 st.toast(f"🎉 扫码登录成功！欢迎 {u_arg}")
-        except:
-            pass
+        except: pass
 
 # ================= 🔐 侧边栏 =================
 with st.sidebar:
@@ -202,29 +235,19 @@ with st.sidebar:
     if st.session_state.current_user:
         st.success(f"👤 已登录: **{st.session_state.current_user}**")
         
-        # --- 📱 免密分享功能 (新增) ---
         with st.expander("📱 生成免密二维码"):
             st.caption("朋友扫此码可直接登录你的账号")
-            # 构造自动登录链接
             try:
-                # 获取当前密码 (注意：这里需要从 Secrets 的 users 里反查，或者要求用户确认密码)
-                # 为了安全，这里我们只生成“当前用户”的分享码，假设用户知道密码
-                confirm_pass = st.text_input("验证当前密码生成二维码", type="password")
+                confirm_pass = st.text_input("验证当前密码生成", type="password")
                 if confirm_pass:
                     users_db = get_all_users()
                     if users_db.get(st.session_state.current_user) == hash_password(confirm_pass):
-                        # 生成链接
                         b64_pass = base64.b64encode(confirm_pass.encode()).decode()
-                        # 获取当前页面的 Base URL (Streamlit 有点难获取真实域名，这里通常需要手动指定或自动推导)
-                        # 我们假设这是部署在 Streamlit Cloud
-                        app_url = "https://ai-prompt-app-gxjdrkrdhwkzaitakk9yri.streamlit.app" # ⚠️ 这里最好换成你真实的 App 网址
+                        app_url = "https://share.streamlit.io" # 这里可以换成你具体的app地址
                         login_link = f"{app_url}?u={st.session_state.current_user}&p={b64_pass}"
-                        
-                        # 生成二维码
                         qr_img = generate_qr_code(login_link)
                         st.image(qr_img, caption="微信扫一扫，免密直连")
-                    else:
-                        st.error("密码错误")
+                    else: st.error("密码错误")
             except: pass
 
         if st.button("退出登录"):
@@ -232,20 +255,21 @@ with st.sidebar:
             st.rerun()
     else:
         auth_mode = st.radio("选择模式", ["登录", "注册新账号"], horizontal=True)
-        user_input_name = st.text_input("用户名")
+        user_input_name = st.text_input("用户名", placeholder="设置英文用户名")
         user_input_pass = st.text_input("密码", type="password")
         
         if auth_mode == "登录":
             if st.button("登录", type="primary"):
                 users_db = get_all_users()
-                if user_input_name in users_db and users_db[user_input_name] == hash_password(user_input_pass):
+                hashed_pw = hash_password(user_input_pass)
+                if user_input_name in users_db and users_db[user_input_name] == hashed_pw:
                     st.session_state.current_user = user_input_name
                     st.success("✅ 登录成功！")
                     time.sleep(0.5)
                     st.rerun()
-                else: st.error("账号或密码错误")
+                else: st.error("❌ 用户名或密码错误")
         else:
-            if st.button("✨ 注册"):
+            if st.button("✨ 立即注册"):
                 if len(user_input_name) < 3: st.warning("用户名太短")
                 elif not user_input_pass: st.warning("密码不能为空")
                 else:
@@ -258,7 +282,7 @@ with st.sidebar:
                     else: st.error(msg)
 
     st.markdown("---")
-    st.markdown("### ⚙️ 设置")
+    st.markdown("### ⚙️ 系统设置")
     base_url = st.text_input("API 地址", value="https://hk-api.gptbest.vip/v1")
     text_model = st.text_input("文本模型", value="deepseek-chat")
     vision_model = st.text_input("视觉模型", value="gpt-4o-mini")
@@ -267,7 +291,7 @@ with st.sidebar:
 st.markdown("# 🍊 AI Prompt Wizard <small>Pro</small>", unsafe_allow_html=True)
 
 if not st.session_state.current_user:
-    st.info("👋 请先在左侧 **登录** 或 **注册**。")
+    st.info("👋 欢迎！请在左侧 **登录** 或 **注册**。")
     st.stop()
 
 tab1, tab2, tab3 = st.tabs(["📝 生成提示词", "🖼️ 图片反推", "🌟 我的云端宝库"])
