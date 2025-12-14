@@ -64,11 +64,12 @@ if st.button("🚀 开始施法 (生成)", type="primary"):
                 final_output = f"{ai_result} {ratio.split(' ')[0]} {ratio.split(' ')[1]}"
 
             st.success("生成成功！")
-            st.code(final_output, language="bash") # 方便复制的框
+            st.text_area("生成结果 (可直接复制或修改)", final_output, height=200)
             
             st.markdown("### 💡 参考解释")
             st.info(f"AI 为你补充了细节，风格选择了：{mode}")
 
         except Exception as e:
             st.error(f"发生错误：{str(e)}")
+
             st.markdown("提示：请检查 API Key 是否正确，或者网络是否通畅。")
