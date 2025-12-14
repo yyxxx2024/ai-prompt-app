@@ -2,3 +2,4 @@ streamlit
 openai
 requests
 python-docx
+qrcode
