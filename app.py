@@ -5,13 +5,13 @@ import json
 import requests
 import time
 import io
-from docx import Document  # 📦 新增：用于生成 Word
+from docx import Document
 
 # 1. 页面设置
 st.set_page_config(page_title="🎨 AI 提示词魔法师 Pro", page_icon="🏗️", layout="centered")
 st.title("✨ AI 提示词魔法师 Pro")
 
-# --- 🛠️ Gitee 云存储函数 ---
+# --- 🛠️ Gitee 云存储配置 ---
 def get_gitee_config():
     return {
         "token": st.secrets["GITEE_TOKEN"],
@@ -22,9 +22,9 @@ def get_gitee_config():
 
 def load_data():
     """从 Gitee 读取数据"""
-    cfg = get_gitee_config()
-    url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/{cfg['path']}"
     try:
+        cfg = get_gitee_config()
+        url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/{cfg['path']}"
         response = requests.get(url, params={"access_token": cfg['token']})
         if response.status_code == 200:
             content = response.json()['content']
@@ -35,32 +35,56 @@ def load_data():
 
 def save_data_item(new_item):
     """向 Gitee 追加数据"""
-    cfg = get_gitee_config()
-    url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/{cfg['path']}"
     try:
+        cfg = get_gitee_config()
+        url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/{cfg['path']}"
+        
+        # 1. 获取旧数据
         get_res = requests.get(url, params={"access_token": cfg['token']})
-        if get_res.status_code != 200: st.error("连接 Gitee 失败"); return
+        if get_res.status_code != 200: 
+            st.error("Gitee 连接失败，请检查 Secrets 配置")
+            return
 
         file_info = get_res.json()
         sha = file_info['sha']
-        old_content = base64.b64decode(file_info['content']).decode('utf-8')
-        data_list = json.loads(old_content)
+        
+        # 解析旧内容
+        try:
+            old_content = base64.b64decode(file_info['content']).decode('utf-8')
+            if not old_content: data_list = []
+            else: data_list = json.loads(old_content)
+        except: data_list = []
+        
+        # 追加新内容
         data_list.append(new_item)
         
+        # 2. 推送新数据
         new_content_str = json.dumps(data_list, ensure_ascii=False, indent=4)
         new_content_b64 = base64.b64encode(new_content_str.encode('utf-8')).decode('utf-8')
         
-        payload = {"access_token": cfg['token'], "content": new_content_b64, "sha": sha, "message": "Add item"}
-        requests.put(url, json=payload)
-        st.toast("☁️ 已保存到 Gitee！")
-        time.sleep(1)
-    except Exception as e: st.error(f"同步出错: {e}")
+        payload = {
+            "access_token": cfg['token'], 
+            "content": new_content_b64, 
+            "sha": sha, 
+            "message": "Add item from Streamlit"
+        }
+        
+        put_res = requests.put(url, json=payload)
+        if put_res.status_code == 200:
+            st.toast("☁️ 已保存到 Gitee 云端！")
+            time.sleep(1)
+        else:
+            st.error(f"保存失败: {put_res.text}")
+            
+    except Exception as e: 
+        st.error(f"同步出错: {e}")
 
 def delete_data_item(index_to_delete):
     """删除数据"""
-    cfg = get_gitee_config()
-    url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/{cfg['path']}"
     try:
+        cfg = get_gitee_config()
+        url = f"https://gitee.com/api/v5/repos/{cfg['owner']}/{cfg['repo']}/contents/{cfg['path']}"
+        
         get_res = requests.get(url, params={"access_token": cfg['token']})
         file_info = get_res.json()
         sha = file_info['sha']
@@ -77,27 +101,19 @@ def delete_data_item(index_to_delete):
         st.rerun()
     except Exception as e: st.error(f"删除失败: {e}")
 
-# --- 📝 Word 导出函数 (新增) ---
+# --- 📝 Word 导出函数 ---
 def generate_word_file(data):
     doc = Document()
     doc.add_heading('🌟 我的 AI 提示词宝库', 0)
-    
-    # 按分类整理数据
     categories = list(set([d['category'] for d in data]))
     categories.sort()
-    
     for cat in categories:
         doc.add_heading(f"📂 分类：{cat}", level=1)
-        # 获取该分类下的所有提示词
         items = [d for d in data if d['category'] == cat]
         for item in items:
             doc.add_heading(item.get('desc', '无标题'), level=2)
-            doc.add_paragraph(f"Prompt:", style='Intense Quote')
             p = doc.add_paragraph(item['prompt'])
-            p.runs[0].font.name = 'Courier New' # 设置为等宽字体更好看
-            doc.add_paragraph("-" * 20) # 分隔线
-            
-    # 保存到内存流
+            doc.add_paragraph("-" * 20)
     bio = io.BytesIO()
     doc.save(bio)
     bio.seek(0)
@@ -116,14 +132,12 @@ with st.sidebar:
     SYSTEM_PASSWORD = st.secrets.get("APP_PASSWORD", None)
     SYSTEM_API_KEY = st.secrets.get("API_KEY", None)
     user_password = st.text_input("🔑 访问密码", type="password", placeholder="输入密码...")
-    manual_key = st.text_input("或手动输入 Key", type="password", label_visibility="collapsed")
-
+    
     if SYSTEM_PASSWORD and user_password == SYSTEM_PASSWORD:
         if SYSTEM_API_KEY:
             st.session_state.cached_api_key = SYSTEM_API_KEY
             st.success("✅ 令牌已加载")
         else: st.error("Secrets 未配置 API_KEY")
-    elif manual_key: st.session_state.cached_api_key = manual_key
 
     st.markdown("---")
     st.header("⚙️ API 设置")
@@ -139,7 +153,7 @@ with tab1:
     st.subheader("✍️ 双方案生成")
     user_input = st.text_area("画面描述", height=80, placeholder="例如：极简白色美术馆...")
     c1, c2 = st.columns(2)
-    with c1: ratio = st.selectbox("画幅", ["--ar 16:9", "--ar 3:4", "--ar 1:1"])
+    with c1: ratio = st.selectbox("画幅", ["--ar 16:9", "--ar 3:4", "--ar 1:1", "--ar 9:16"])
     with c2: mode = st.selectbox("模式", ["🏗️ 建筑效果图", "标准模式", "自然语言", "二次元"])
 
     with st.expander("🎨 高级参数"):
@@ -148,7 +162,9 @@ with tab1:
             with ac1: arch_view = st.selectbox("视角", ["不指定", "人视", "鸟瞰", "透视"])
             with ac2: arch_time = st.selectbox("时刻", ["不指定", "蓝调", "黄金时刻", "日景"])
         else:
-            style = st.selectbox("风格", ["不指定", "赛博朋克", "极简", "油画"])
+            col_a, col_b = st.columns(2)
+            with col_a: lighting = st.selectbox("光线", ["不指定", "自然光", "电影光", "霓虹"])
+            with col_b: mood = st.selectbox("氛围", ["不指定", "梦幻", "史诗", "阴郁"])
 
     if st.button("🚀 生成"):
         if not st.session_state.cached_api_key: st.error("请输密码"); st.stop()
@@ -160,12 +176,15 @@ with tab1:
             with st.spinner('AI 构思中...'):
                 resp = client.chat.completions.create(model=text_model, messages=[{"role":"system","content":sys_msg}, {"role":"user","content":req_msg}])
                 raw = resp.choices[0].message.content
+                # 修复了这里的 try/except 结构
                 try:
                     p1_cn = raw.split("===PLAN_A_EN===")[0].replace("===PLAN_A_CN===", "").strip()
                     p1_en = raw.split("===PLAN_B_CN===")[0].split("===PLAN_A_EN===")[1].strip() + f" {ratio}"
                     p2_cn = raw.split("===PLAN_B_EN===")[0].split("===PLAN_B_CN===")[1].strip()
                     p2_en = raw.split("===PLAN_B_EN===")[1].strip() + f" {ratio}"
-                except: p1_cn, p1_en, p2_cn, p2_en = "解析失败", raw, "解析失败", raw
+                except: 
+                    p1_cn, p1_en, p2_cn, p2_en = "解析失败", raw, "解析失败", raw
+                
                 st.session_state.last_results = {"p1_cn": p1_cn, "p1_en": p1_en, "p2_cn": p2_cn, "p2_en": p2_en}
         except Exception as e: st.error(str(e))
 
@@ -175,88 +194,67 @@ with tab1:
         with col_a:
             st.info(f"A: {res['p1_cn']}")
             st.code(res['p1_en'])
-            # 简化版收藏按钮：默认存到"未分类"
             if st.button("❤️ 存方案 A"): save_data_item({"category": "默认", "desc": res["p1_cn"][:20], "prompt": res["p1_en"]})
         with col_b:
             st.info(f"B: {res['p2_cn']}")
             st.code(res['p2_en'])
             if st.button("❤️ 存方案 B"): save_data_item({"category": "默认", "desc": res["p2_cn"][:20], "prompt": res["p2_en"]})
 
-# ==================== Tab 2: 图片反推 (略) ====================
+# ==================== Tab 2: 图片反推 ====================
 with tab2:
-    st.caption("上传图片反推提示词...")
-    # (此处省略部分重复代码以保持精简，功能逻辑同前)
-    # ...建议保留之前版本的 Tab 2 代码...
-    
-# ==================== Tab 3: 云端宝库 (重点更新) ====================
+    st.subheader("🖼️ 图片反推")
+    uploaded_file = st.file_uploader("拖入图片", type=["jpg", "png"])
+    if uploaded_file and st.button("🔍 反推"):
+        if not st.session_state.cached_api_key: st.error("请输密码"); st.stop()
+        try:
+            client = OpenAI(api_key=st.session_state.cached_api_key, base_url=base_url)
+            img_b64 = encode_image(uploaded_file)
+            with st.spinner('AI 正在看图...'):
+                resp = client.chat.completions.create(model=vision_model, messages=[{"role": "user", "content": [{"type": "text", "text": "输出格式：\nCN: [中文]\nEN: [MJ Prompt]"}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}] )
+            raw = resp.choices[0].message.content
+            if "EN:" in raw:
+                cn, en = raw.split("EN:")[0].replace("CN:", "").strip(), raw.split("EN:")[1].strip()
+                st.image(uploaded_file, width=150)
+                st.info(cn); st.code(en)
+                if st.button("❤️ 收藏此结果"): save_data_item({"category": "反推", "desc": cn[:20], "prompt": en})
+        except Exception as e: st.error(str(e))
+
+# ==================== Tab 3: 云端宝库 ====================
 with tab3:
-    st.header("🌟 云端提示词宝库")
-    
-    # 1. 加载数据
+    st.header("🌟 云端宝库 (Gitee版)")
     try: data = load_data()
     except: data = []
     
-    # 🌟 核心功能 1：Word 导出
     if data:
-        col_exp1, col_exp2 = st.columns([3, 1])
-        with col_exp1:
-            st.caption(f"当前共有 {len(data)} 条收藏数据")
-        with col_exp2:
-            # 生成 Word 文件流
-            docx_file = generate_word_file(data)
-            st.download_button(
-                label="📥 导出 Word 文档",
-                data=docx_file,
-                file_name="我的提示词宝库.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-    
-    st.divider()
+        docx = generate_word_file(data)
+        st.download_button("📥 导出 Word", data=docx, file_name="提示词库.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
-    # 🌟 核心功能 2：自定义分类添加
-    with st.expander("➕ 手动添加 (支持自定义分类)", expanded=True):
-        with st.form("add_prompt_form"):
-            # 1. 获取现有分类
-            existing_cats = list(set([d['category'] for d in data])) if data else ["建筑", "人像"]
-            
-            # 2. 交互逻辑：选择现有 OR 新建
-            cat_choice = st.selectbox("选择或新建分类", ["📝 手动输入新分类..."] + existing_cats)
-            
-            # 3. 如果选了手动输入，显示输入框
+    st.divider()
+    with st.expander("➕ 手动添加 (支持新建分类)", expanded=True):
+        with st.form("add_form"):
+            cats = list(set([d['category'] for d in data])) if data else ["建筑", "人像"]
+            cat_mode = st.selectbox("分类", ["📝 新建分类..."] + cats)
             custom_cat = ""
-            if cat_choice == "📝 手动输入新分类...":
-                custom_cat = st.text_input("请输入新分类名称", placeholder="例如：Logo设计")
+            if cat_mode == "📝 新建分类...": custom_cat = st.text_input("输入新分类名")
             
-            new_desc = st.text_input("备注名称", placeholder="例如：蓝色科技感Logo")
-            new_content = st.text_area("提示词内容", placeholder="粘贴 Prompt...")
-            
-            if st.form_submit_button("💾 保存到云端"):
-                # 确定最终分类名称
-                final_cat = custom_cat if cat_choice == "📝 手动输入新分类..." else cat_choice
-                
-                if not final_cat: st.warning("分类不能为空！"); st.stop()
-                if not new_content: st.warning("内容不能为空！"); st.stop()
-                
-                save_data_item({"category": final_cat, "desc": new_desc, "prompt": new_content})
-                st.rerun()
+            desc = st.text_input("备注")
+            content = st.text_area("内容")
+            if st.form_submit_button("💾 保存"):
+                final_cat = custom_cat if cat_mode == "📝 新建分类..." else cat_mode
+                if final_cat and content:
+                    save_data_item({"category": final_cat, "desc": desc, "prompt": content})
+                    st.rerun()
 
     st.divider()
-    
-    # 3. 列表展示
-    if not data:
-        st.info("🗑️ 暂无数据")
+    if not data: st.info("暂无数据 (请检查 Secrets 配置)")
     else:
-        # 筛选
-        all_cats_filter = ["全部"] + list(set(d['category'] for d in data))
-        selected_cat_filter = st.selectbox("📂 查看筛选", all_cats_filter)
-        
+        all_cats = ["全部"] + list(set([d['category'] for d in data]))
+        sel_cat = st.selectbox("筛选", all_cats)
         for i in range(len(data)-1, -1, -1):
-            item = data[i]
-            if selected_cat_filter == "全部" or item["category"] == selected_cat_filter:
+            d = data[i]
+            if sel_cat == "全部" or d['category'] == sel_cat:
                 with st.container(border=True):
-                    c1, c2 = st.columns([6, 1])
-                    with c1:
-                        st.markdown(f"**🏷️ {item['category']} | {item.get('desc','无标题')}**")
-                        st.text(item['prompt'])
-                    with c2:
-                        if st.button("🗑️", key=f"del_{i}"): delete_data_item(i)
+                    c1, c2 = st.columns([6,1])
+                    with c1: st.markdown(f"**[{d['category']}] {d.get('desc','')}**"); st.text(d['prompt'])
+                    with c2: 
+                        if st.button("🗑️", key=f"d_{i}"): delete_data_item(i)
