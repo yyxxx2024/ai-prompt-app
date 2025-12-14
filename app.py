@@ -90,10 +90,11 @@ if st.button("🚀 开始施法 (生成)", type="primary"):
             
             # 这里是你要求的【大框 + 自动换行】
             st.markdown("### ✅ 生成结果 (点击右上角复制)")
-st.code(final_output, language="text", wrap_lines=True)
+            st.code(final_output, language="text", wrap_lines=True)
             
             st.info(f"✨ 已应用高级选项：{lighting} | {camera} | {material}")
 
         except Exception as e:
             st.error(f"出错啦：{str(e)}")
+
 
