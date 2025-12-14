@@ -5,6 +5,7 @@ import json
 import requests
 import time
 import io
+
 # 尝试导入 docx
 try:
     from docx import Document
@@ -13,147 +14,155 @@ except ImportError:
     HAS_DOCX = False
 
 # ================= 1. 页面基本设置 =================
-st.set_page_config(page_title="Neo-Prompt AI", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="AI 提示词魔法师 Pro", page_icon="🍊", layout="centered")
 
-# ================= 🎨 核心：注入赛博朋克 CSS 样式 =================
-def add_cyberpunk_style():
+# ================= 🎨 核心：注入现代极简 CSS 样式 =================
+def add_modern_light_style():
     st.markdown("""
     <style>
-        /* 1. 全局背景：深空渐变 */
+        /* 1. 全局背景：浅灰白 */
         .stApp {
-            background: linear-gradient(135deg, #050511 0%, #1a1a2e 50%, #16213e 100%);
-            background-attachment: fixed;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            font-family: 'PingFang SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #333333;
         }
 
-        /* 2. 主容器：玻璃拟态效果 */
+        /* 2. 主内容容器：白卡片 + 柔和阴影 */
         .block-container {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            border: 1px solid rgba(0, 255, 255, 0.1);
-            padding: 30px;
-            box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
-            max-width: 800px;
+            background-color: #ffffff;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            margin-top: 20px;
+            max-width: 900px;
         }
 
-        /* 3. 标题样式：霓虹发光文字 */
+        /* 3. 标题样式 */
         h1 {
-            color: #fff;
-            text-align: center;
-            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
-            font-weight: 800 !important;
-            letter-spacing: 2px;
-            text-transform: uppercase;
+            color: #1a1a1a;
+            font-weight: 700 !important;
+            letter-spacing: -0.5px;
         }
         h2, h3 {
-            color: #e0e0e0 !important;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.3);
-            padding-bottom: 10px;
-        }
-
-        /* 4. 输入框 (Text Area & Input)：深色背景 + 青色边框 */
-        .stTextArea textarea, .stTextInput input {
-            background-color: rgba(0, 0, 0, 0.4) !important;
-            color: #00ffff !important; /* 霓虹青字体 */
-            border: 1px solid rgba(0, 255, 255, 0.3) !important;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-        .stTextArea textarea:focus, .stTextInput input:focus {
-            border-color: #00ffff !important;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
-        }
-
-        /* 5. 下拉菜单 (Selectbox) */
-        .stSelectbox div[data-baseweb="select"] > div {
-            background-color: rgba(0, 0, 0, 0.4) !important;
-            color: #fff !important;
-            border: 1px solid rgba(255, 0, 255, 0.3); /* 粉色边框 */
-            border-radius: 10px;
-        }
-
-        /* 6. 按钮 (Button)：橙色/粉色渐变霓虹灯 */
-        div.stButton > button {
-            width: 100%;
-            background: linear-gradient(90deg, #ff4b1f, #ff9068); /* 橙红渐变 */
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 30px;
-            font-size: 18px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 0 20px rgba(255, 75, 31, 0.4);
-            transition: all 0.3s ease;
-        }
-        div.stButton > button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 30px rgba(255, 75, 31, 0.7);
-            background: linear-gradient(90deg, #ff9068, #ff4b1f);
+            color: #333 !important;
+            font-weight: 600;
         }
         
-        /* 次级按钮 (收藏/删除) 改为青色风格 */
-        div.stButton > button:not([kind="primary"]) {
-             background: transparent;
-             border: 1px solid #00ffff;
-             color: #00ffff;
-             box-shadow: none;
-        }
-        div.stButton > button:not([kind="primary"]):hover {
-             background: rgba(0, 255, 255, 0.1);
-             box-shadow: 0 0 10px #00ffff;
+        /* 小标题/说明文字 */
+        .stCaption {
+            color: #888;
+            font-size: 14px;
         }
 
-        /* 7. 侧边栏 (Sidebar) */
+        /* 4. 输入框：极简灰边框 + 白底 */
+        .stTextArea textarea, .stTextInput input {
+            background-color: #ffffff !important;
+            color: #333 !important;
+            border: 1px solid #e0e0e0 !important;
+            border-radius: 8px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
+            transition: border 0.3s;
+        }
+        .stTextArea textarea:focus, .stTextInput input:focus {
+            border-color: #ff7e5f !important; /* 聚焦时变橙色 */
+            box-shadow: 0 0 0 2px rgba(255, 126, 95, 0.2);
+        }
+
+        /* 5. 下拉菜单 */
+        .stSelectbox div[data-baseweb="select"] > div {
+            background-color: #f8f9fa !important;
+            color: #333 !important;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+
+        /* 6. 核心按钮：暖橙色渐变 (参考图风格) */
+        div.stButton > button[kind="primary"] {
+            width: 100%;
+            background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
+            color: white !important;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 4px 15px rgba(255, 94, 98, 0.3);
+            transition: all 0.3s ease;
+        }
+        div.stButton > button[kind="primary"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 94, 98, 0.4);
+            background: linear-gradient(135deg, #ff5e62 0%, #ff9966 100%);
+        }
+
+        /* 次级按钮：简洁白底 */
+        div.stButton > button[kind="secondary"] {
+            background-color: #fff;
+            border: 1px solid #eee;
+            color: #555;
+            border-radius: 8px;
+        }
+        div.stButton > button[kind="secondary"]:hover {
+            border-color: #ff9966;
+            color: #ff9966;
+            background-color: #fffaf8;
+        }
+
+        /* 7. 侧边栏：纯白 + 分割线 */
         section[data-testid="stSidebar"] {
-            background-color: #0a0a12;
-            border-right: 1px solid #333;
+            background-color: #ffffff;
+            border-right: 1px solid #f0f0f0;
         }
         
         /* 8. 标签页 (Tabs) */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 10px;
-            background-color: transparent;
+            gap: 20px;
         }
         .stTabs [data-baseweb="tab"] {
-            background-color: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            color: #aaa;
-            border: none;
+            height: 50px;
+            white-space: pre-wrap;
+            background-color: transparent;
+            border-radius: 0;
+            color: #666;
+            font-weight: 500;
         }
         .stTabs [aria-selected="true"] {
-            background-color: rgba(0, 255, 255, 0.1) !important;
-            color: #00ffff !important;
-            border: 1px solid #00ffff !important;
-            box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+            color: #ff5e62 !important;
+            border-bottom: 3px solid #ff5e62 !important;
         }
 
-        /* 9. 代码块结果显示 */
+        /* 9. 代码块：浅灰背景 */
         code {
-            color: #ff00ff !important; /* 霓虹粉代码 */
-            font-family: 'Courier New', monospace;
+            color: #d63384 !important;
+            background-color: #f8f9fa !important;
+            border-radius: 4px;
+            padding: 2px 4px;
         }
         .stCode {
-            background-color: #000 !important;
-            border: 1px solid #333;
+            background-color: #f8f9fa !important;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+
+        /* 10. 提示框 (Success/Info) - 柔和配色 */
+        .stAlert[data-baseweb="notification"] {
             border-radius: 10px;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
         
-        /* 10. 提示框 (Success/Info/Error) */
-        .stAlert {
-            background-color: rgba(0,0,0,0.6);
-            backdrop-filter: blur(5px);
-            border: 1px solid #555;
-            color: #fff;
+        /* 11. 扩展面板 (Expander) */
+        .streamlit-expanderHeader {
+            background-color: #fbfbfc;
+            border-radius: 8px;
+            color: #444;
         }
     </style>
     """, unsafe_allow_html=True)
 
-add_cyberpunk_style()
+add_modern_light_style()
 
-# ================= 🛠️ 工具函数区 (保持逻辑不变) =================
+# ================= 🛠️ 工具函数区 =================
 
 def get_gitee_config():
     return {
@@ -258,20 +267,21 @@ with st.sidebar:
     vision_model = st.text_input("视觉模型", value="gpt-4o-mini")
 
 # ================= 🏗️ 主界面 =================
-st.markdown("<h1>NEO-PROMPT AI <small>v2.0</small></h1>", unsafe_allow_html=True)
-st.caption("🚀 Cyberpunk Style Enabled | Powered by DeepSeek & GPT-4o")
+st.markdown("# 🍊 AI Prompt Wizard <small>Pro</small>", unsafe_allow_html=True)
+st.caption("激发你的无限创意 | Powered by DeepSeek & GPT-4o")
 
 tab1, tab2, tab3 = st.tabs(["📝 生成提示词", "🖼️ 图片反推", "🌟 云端宝库"])
 
-# --- Tab 1 ---
+# --- Tab 1: 文本生成 ---
 with tab1:
-    user_input = st.text_area("输入你的创意概念...", height=100, placeholder="例如：一座漂浮在云端的赛博朋克城市，霓虹灯闪烁...")
+    st.markdown("##### ✍️ 描述你的画面")
+    user_input = st.text_area("输入", height=100, label_visibility="collapsed", placeholder="例如：一个极简风格的白色美术馆，光影交错，周围是平静的水面...")
     
     c1, c2 = st.columns(2)
     with c1: ratio = st.selectbox("画幅比例", ["--ar 16:9", "--ar 3:4", "--ar 1:1", "--ar 9:16"])
     with c2: mode = st.selectbox("生成模式", ["🏗️ 建筑效果图", "标准模式", "自然语言", "二次元"])
 
-    with st.expander("🎨 高级参数配置 (点击展开)"):
+    with st.expander("🎨 高级参数配置 (点此展开)"):
         st.caption("根据模式选择参数：")
         if "建筑" in mode:
             ac1, ac2 = st.columns(2)
@@ -282,8 +292,8 @@ with tab1:
             with col_a: lighting = st.selectbox("光线", ["不指定", "自然光", "电影光", "霓虹"])
             with col_b: mood = st.selectbox("氛围", ["不指定", "梦幻", "史诗", "阴郁"])
 
-    # 这里的按钮会自动应用 CSS 里的发光样式
-    if st.button("GENERATE / 生成双方案", type="primary"):
+    # 橙色大按钮
+    if st.button("🚀 立即生成 / Generate", type="primary"):
         if not st.session_state.cached_api_key:
             st.error("请先在侧边栏输入密码解锁！")
             st.stop()
@@ -304,7 +314,7 @@ with tab1:
             """
             req_msg = f"User Request: {user_input}. Mode: {mode}. Ratio: {ratio}"
             
-            with st.spinner('AI 正在连接矩阵网络...'):
+            with st.spinner('✨ AI 正在构思方案...'):
                 resp = client.chat.completions.create(model=text_model, messages=[{"role":"system","content":sys_msg}, {"role":"user","content":req_msg}])
                 raw = resp.choices[0].message.content
                 try:
@@ -323,45 +333,51 @@ with tab1:
         st.divider()
         col_a, col_b = st.columns(2)
         with col_a:
-            st.markdown("### PROMPT 1: 精准版")
+            st.markdown("#### 🅰️ 方案 A (精准还原)")
             st.info(res['p1_cn'])
             st.code(res['p1_en'])
-            if st.button("💾 收藏方案 A"):
+            if st.button("❤️ 收藏 A", key="btn_a"):
                 save_data_item({"category": "默认", "desc": res["p1_cn"][:20], "prompt": res["p1_en"]})
         with col_b:
-            st.markdown("### PROMPT 2: 创意版")
+            st.markdown("#### 🅱️ 方案 B (艺术发散)")
             st.info(res['p2_cn'])
             st.code(res['p2_en'])
-            if st.button("💾 收藏方案 B"):
+            if st.button("❤️ 收藏 B", key="btn_b"):
                 save_data_item({"category": "默认", "desc": res["p2_cn"][:20], "prompt": res["p2_en"]})
 
-# --- Tab 2 ---
+# --- Tab 2: 图片反推 ---
 with tab2:
-    up_file = st.file_uploader("上传图片 (Image Upload)", type=["jpg", "png"])
-    if up_file and st.button("ANALYZE / 开始反推"):
+    st.markdown("##### 🖼️ 上传图片获取提示词")
+    up_file = st.file_uploader("Upload Image", type=["jpg", "png"], label_visibility="collapsed")
+    if up_file and st.button("🔍 开始反推", type="primary"):
         if not st.session_state.cached_api_key: st.error("请先输入密码"); st.stop()
         try:
             client = OpenAI(api_key=st.session_state.cached_api_key, base_url=base_url)
             b64 = encode_image(up_file)
-            with st.spinner('Scanning Image...'):
+            with st.spinner('正在分析图片内容...'):
                 resp = client.chat.completions.create(model=vision_model, messages=[{"role":"user","content":[{"type":"text","text":"输出格式：\nCN: [中文描述]\nEN: [MJ Prompt]"},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}}]}] )
             raw = resp.choices[0].message.content
             if "EN:" in raw:
                 cn, en = raw.split("EN:")[0].replace("CN:", "").strip(), raw.split("EN:")[1].strip()
                 st.image(up_file, width=200)
                 st.info(cn); st.code(en)
-                if st.button("💾 收藏此结果"): save_data_item({"category": "反推", "desc": cn[:20], "prompt": en})
+                if st.button("❤️ 收藏结果", key="btn_ocr"): save_data_item({"category": "反推", "desc": cn[:20], "prompt": en})
         except Exception as e: st.error(str(e))
 
-# --- Tab 3 ---
+# --- Tab 3: 云端宝库 ---
 with tab3:
     data = load_data()
-    if data and HAS_DOCX:
-        docx = generate_word(data)
-        st.download_button("📥 导出 Word 文档", data=docx, file_name="NeoPrompts.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    elif not HAS_DOCX: st.warning("缺少 python-docx 库")
-
+    
+    col_head, col_btn = st.columns([3, 1])
+    with col_head:
+        st.markdown(f"##### 📂 云端知识库 (共 {len(data)} 条)")
+    with col_btn:
+        if data and HAS_DOCX:
+            docx = generate_word(data)
+            st.download_button("📥 导出 Word", data=docx, file_name="Prompts.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="dl_doc")
+    
     st.divider()
+    
     with st.expander("➕ 添加新数据"):
         with st.form("add_new"):
             cats = sorted(list(set([d['category'] for d in data]))) if data else ["建筑", "人像"]
@@ -373,8 +389,7 @@ with tab3:
                 save_data_item({"category": new_c, "desc": desc, "prompt": cont})
                 st.rerun()
     
-    st.divider()
-    if not data: st.info("云端数据库为空")
+    if not data: st.info("云端数据库为空，快去添加吧！")
     else:
         f_cat = st.selectbox("筛选分类", ["全部"] + sorted(list(set([d['category'] for d in data]))))
         for i in range(len(data)-1, -1, -1):
@@ -382,6 +397,6 @@ with tab3:
             if f_cat == "全部" or d['category'] == f_cat:
                 with st.container(border=True):
                     c1, c2 = st.columns([6,1])
-                    with c1: st.markdown(f"**[{d['category']}] {d.get('desc','')}**"); st.text(d['prompt'])
+                    with c1: st.markdown(f"**🏷️ [{d['category']}]** {d.get('desc','')} \n\n `{d['prompt']}`")
                     with c2: 
                         if st.button("🗑️", key=f"del_{i}"): delete_data_item(i)
