@@ -243,7 +243,7 @@ with st.sidebar:
                     users_db = get_all_users()
                     if users_db.get(st.session_state.current_user) == hash_password(confirm_pass):
                         b64_pass = base64.b64encode(confirm_pass.encode()).decode()
-                        app_url = "https://share.streamlit.io" # 这里可以换成你具体的app地址
+                        app_url = "https://ai-prompt-app-gxjdrkrdhwkzaitakk9yri.streamlit.app" # 这里可以换成你具体的app地址
                         login_link = f"{app_url}?u={st.session_state.current_user}&p={b64_pass}"
                         qr_img = generate_qr_code(login_link)
                         st.image(qr_img, caption="微信扫一扫，免密直连")
@@ -452,3 +452,4 @@ with tab3:
                     with c1: st.markdown(f"**🏷️ [{d['category']}]** {d.get('desc','')} \n\n `{d['prompt']}`")
                     with c2: 
                         if st.button("🗑️", key=f"del_{i}"): delete_data_item(i, curr_user)
+
