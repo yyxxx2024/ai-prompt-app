@@ -2,11 +2,11 @@ import streamlit as st
 from openai import OpenAI
 import base64
 
-# 1. 页面基本设置
+# 1. 页面设置
 st.set_page_config(page_title="🎨 AI 提示词魔法师 Pro", page_icon="🪄", layout="centered")
 st.title("✨ AI 提示词魔法师 Pro")
 
-# --- 🛠️ 辅助函数：图片转 Base64 ---
+# --- 🛠️ 辅助函数 ---
 def encode_image(uploaded_file):
     return base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
 
@@ -14,14 +14,12 @@ def encode_image(uploaded_file):
 with st.sidebar:
     st.header("🔐 身份验证")
     
-    # 获取密码和Key
     SYSTEM_PASSWORD = st.secrets.get("APP_PASSWORD", None)
     SYSTEM_API_KEY = st.secrets.get("API_KEY", None)
     api_key = None
     
     user_password = st.text_input("🔑 访问密码", type="password", placeholder="输入密码，自动加载 Key")
 
-    # 验证逻辑
     if SYSTEM_PASSWORD and user_password == SYSTEM_PASSWORD:
         api_key = SYSTEM_API_KEY
         st.success("✅ 密码正确！已加载令牌")
@@ -32,7 +30,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.header("⚙️ API 设置")
-    # 默认填入你的香港中转地址
+    # 默认使用你的香港中转地址
     base_url = st.text_input("API 地址", value="https://hk-api.gptbest.vip/v1")
     
     st.caption("📝 文本模型 (DeepSeek)")
@@ -45,121 +43,5 @@ with st.sidebar:
 tab1, tab2 = st.tabs(["📝 文本生成提示词", "🖼️ 图片反推提示词 (看图)"])
 
 # ==========================================
-# 👉 标签 1：文本生成 (双语版)
-# ==========================================
-with tab1:
-    st.subheader("✍️ 描述画面，生成 Prompt")
-    user_input = st.text_area("你想画什么？", height=100, placeholder="例如：一只穿着宇航服的猫，赛博朋克风格...")
-
-    c1, c2 = st.columns(2)
-    with c1: 
-        ratio = st.selectbox("画幅", ["--ar 16:9", "--ar 9:16", "--ar 1:1", "--ar 3:4"])
-    with c2: 
-        mode = st.selectbox("模式", ["标准模式 (MJ/SD)", "建筑设计", "自然语言 (Google)", "二次元 (Niji)", "写实摄影", "3D渲染"])
-
-    # 🔥 核心指令：强制双语输出
-    base_instruction = """
-    You are an expert AI prompt engineer.
-    IMPORTANT: You must output the result in exactly two parts using the specific format below:
-    CN: [Here write the optimized description in Chinese]
-    EN: [Here write the final English prompt]
-    Do not add any other text or explanations.
-    """
-    
-    # 模式微调
-    mode_rules = {
-        "标准模式 (MJ/SD)": "For EN: Output comma-separated keywords. Visual descriptors.",
-        "建筑设计": "For EN: Target Architectural Visualization. Add tags: ArchDaily style, V-Ray, 8k.",
-        "自然语言 (Google)": "For EN: Write a rich, descriptive English paragraph. Start with 'A photo of...'.",
-        "二次元 (Niji)": "For EN: Anime style, cel shading, vibrant colors.",
-        "写实摄影": "For EN: Photorealistic, 8k, shot on Sony A7RIV.",
-        "3D渲染": "For EN: 3D render, blender, c4d, octane render."
-    }
-    
-    sys_prompt = base_instruction + mode_rules.get(mode.split(" ")[0], "")
-
-    if st.button("🚀 生成双语提示词", type="primary"):
-        if not api_key:
-            st.error("请先输入密码！")
-            st.stop()
-        
-        try:
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            
-            with st.spinner('AI 正在双语构思...'):
-                resp = client.chat.completions.create(
-                    model=text_model,
-                    messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_input}]
-                )
-                
-                raw_content = resp.choices[0].message.content
-                
-                # 自动切割逻辑
-                cn_text = "解析中..."
-                en_text = raw_content
-                
-                if "CN:" in raw_content and "EN:" in raw_content:
-                    parts = raw_content.split("EN:")
-                    cn_text = parts[0].replace("CN:", "").strip()
-                    en_text = parts[1].strip()
-                
-                final_en = f"{en_text} {ratio}"
-
-            # 展示结果
-            st.markdown("### 🇨🇳 中文优化构思")
-            st.code(cn_text, language="text", wrap_lines=True)
-            
-            st.markdown("### 🇺🇸 英文提示词 (直接复制去画图)")
-            st.code(final_en, language="text", wrap_lines=True)
-            
-        except Exception as e:
-            st.error(f"出错：{str(e)}")
-
-# ==========================================
-# 👉 标签 2：图片反推 (双语版)
-# ==========================================
-with tab2:
-    st.subheader("🖼️ 上传图片，反推 Prompt")
-    uploaded_file = st.file_uploader("拖入参考图", type=["jpg", "png"])
-    
-    if uploaded_file and st.button("🔍 开始反推"):
-        if not api_key:
-            st.error("请先输入密码！")
-            st.stop()
-            
-        try:
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            img_b64 = encode_image(uploaded_file)
-            
-            with st.spinner('AI 正在看图...'):
-                resp = client.chat.completions.create(
-                    model=vision_model,
-                    messages=[{
-                        "role": "user", 
-                        "content": [
-                            {"type": "text", "text": "分析这张图。请严格按此格式输出：\nCN: [用中文详细描述画面内容]\nEN: [Midjourney格式的英文关键词，逗号分隔]"},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
-                        ]
-                    }]
-                )
-            
-            raw_content = resp.choices[0].message.content
-            
-            # 切割逻辑
-            cn_text = "解析中..."
-            en_text = raw_content
-            if "CN:" in raw_content and "EN:" in raw_content:
-                parts = raw_content.split("EN:")
-                cn_text = parts[0].replace("CN:", "").strip()
-                en_text = parts[1].strip()
-            
-            c1, c2 = st.columns([1, 2])
-            with c1: st.image(uploaded_file, width=150)
-            with c2:
-                st.markdown("**🇨🇳 中文描述**")
-                st.code(cn_text, language="text", wrap_lines=True)
-                st.markdown("**🇺🇸 英文 Prompt**")
-                st.code(en_text, language="text", wrap_lines=True)
-                
-        except Exception as e:
-            st.error(f"出错：{str(e)}")
+# 👉 标签 1：文本生成 (双语 + 高级选项)
+# ========================
